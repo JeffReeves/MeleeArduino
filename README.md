@@ -3,10 +3,13 @@ Arduino assisted Smash Bros. Melee
 
 ## ABOUT
 
-AUTHOR:  Jeffrey Reeves
-WEBSITE: https://alchemist.digital/
-GITHUB:  https://github.com/JeffReeves
-PURPOSE: Improves consistency in Super Smash Brothers Melee for the 
+**AUTHOR**:  Jeffrey Reeves
+
+**WEBSITE**: https://alchemist.digital/
+
+**GITHUB**:  https://github.com/JeffReeves
+
+**PURPOSE**: Improves consistency in Super Smash Brothers Melee for the 
     Nintendo GameCube.
 
 ## FEATURES
