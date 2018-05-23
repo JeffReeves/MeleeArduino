@@ -84,6 +84,29 @@ last_t = millis();
 // note: when this executes for shorthop 3 must be used
 //  2 sometimes doesn't jump, 4 sometimes full hops
 
+
+//--[ JUMPSQUAT ]---------------------------------------------------------------
+
+/*
+Full Jumpsquat durations in frames [airborne next frame]: 
+
+3 frames
+    Fox / Ice Climbers / Kirby / Pichu / Pikachu / Samus / Sheik
+    
+4 frames
+    Captain Falcon / Dr. Mario / Luigi / Mario / Marth / 
+    Mr. Game & Watch / Ness / Young Link
+
+5 frames
+    DK / Falco / Jigglypuff / Mewtwo / Peach / Roy / Yoshi
+
+6 frames
+    Ganondorf / Link / Zelda
+
+8 frames
+    Bowser
+*/
+
 //--[ FRAME COUNTER USING MICROSECONDS ]----------------------------------------
 
 const double MICROSECOND_PER_FRAME = 16666.66666666667; // 1000000 μs / 60 fps

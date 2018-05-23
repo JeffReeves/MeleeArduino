@@ -1,5 +1,6 @@
 # MeleeArduino
-Arduino assisted Smash Bros. Melee
+Improves accessibility and consistency for human players in 
+Super Smash Brothers Melee for the Nintendo GameCube.
 
 ## ABOUT
 
@@ -9,13 +10,13 @@ Arduino assisted Smash Bros. Melee
 
 **GITHUB**:  https://github.com/JeffReeves
 
-**PURPOSE**: Improves consistency in Super Smash Brothers Melee for the 
-    Nintendo GameCube.
+**LICENSE**: GNU General Public License v3.0
 
 ## FEATURES
-- Three profile toggle using D-pad (Left, Right, Down)
-- Perfect dashback that prevents tilt turn
+- Perfect dashback that prevents slower tilt turn state
 - Dedicated shorthop button (X)
+- Always jumpcancel grab with Z button
+- Three profile toggle using D-pad (Left, Right, Down)
 
 ## PREREQUISITES
 - Arduino (UNO, Nano, etc.)
@@ -35,6 +36,10 @@ Arduino assisted Smash Bros. Melee
 7. Disconnect the Arduino from the PC.
 8. Plug in the Controller into the Game Console and start it up.
 9. Enjoy playing Melee!
+
+### NOTE 
+Unless approved by a Tournament Organizer (TO), do **NOT** use this 
+Arduino assistant during competitive play.
 
 ## How to Wire Arduino and Logic Level Converter
 
