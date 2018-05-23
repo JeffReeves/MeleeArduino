@@ -9,6 +9,7 @@
 *   FEATURES:
 *       - Three profile toggle using D-pad (Left, Right, Down)
 *       - Perfect dashback that prevents tilt turn
+*       - Dedicated shorthop button (X)
 *
 *
 *   PREREQUISITES:
@@ -37,42 +38,57 @@
 
 /*==[ INIT ]==================================================================*/
 
-// NicoHood's Nintendo Library
+//--[ NICOHOOD'S NINTENDO LIBRARY ]---------------------------------------------
+
 #include <Nintendo.h>
 
-// define Arduino ports for Controller and Console data line
-CGamecubeController controller(2);      // reads from Controller on D2
-CGamecubeConsole console(3);            // writes to Console on D3
+// arduino ports for data wire
+CGamecubeController controller(2);  // reads from controller on D2
+CGamecubeConsole console(3);        // writes to console on D3
 
 // define object to store controller data
 Gamecube_Report_t gcc = defaultGamecubeData.report;
 
-// constants
+
+//--[ CONSTANTS ]---------------------------------------------------------------
+
+// timing
+const unsigned char PROFILE_CHANGE_TIME = 100; // 100 ms
+
+// controls
 const unsigned char ANALOG_MAX_LEFT = 0;     // maximum X position left
 const unsigned char ANALOG_MAX_RIGHT = 255;  // maximum X position right
 const unsigned char ANALOG_MEDIAN = 128;     // middle of joystick
 const unsigned char DEAD_ZONE_END = 36;      // 0.2875, closest: 36 = 0.28125
 const unsigned char SMASH_TURN_START = 103;  // 0.8000, closest: 103 = 0.8046875
 
-const unsigned char PROFILE_CHANGE_TIME = 100; // 100 ms
 
-// global variables
+//--[ GLOBALS ]-----------------------------------------------------------------
+
+// timing
+unsigned long counter_X = 0;    // used for keeping time during macros
+unsigned char cycles = 3;       // 3 = GC/Wii, 9 = Dolphin
+unsigned char buffer = 0; 
+unsigned long loop_time, current_time; 
+
+// controls
 int analog_x, analog_y, cstick_x, cstick_y; 
 unsigned char analog_x_abs, analog_y_abs, cstick_x_abs, cstick_y_abs;
 
-unsigned char cycles = 3; // number of cycles to use (3 = GC/Wii, 9 = Dolphin)
-unsigned char buffer = 0; 
-
-unsigned long loop_time, current_time; 
-
+// profiles
 char active_profile = 'L';
 
 
 //==[ FUNCTIONS ]===============================================================
 
-// profiles 
+//--[ SUPPORT ]-----------------------------------------------------------------
+
+
+//--[ PROFILES ]----------------------------------------------------------------
+
 void profile_left(){
     backdash();
+    shorthop();
     test();
 }
 
@@ -127,6 +143,9 @@ void toggle_profiles(){
     }
 }
 
+
+//--[ CONSISTENCY ]-------------------------------------------------------------
+
 // prevents tilt turn when attempting to backdash
 // sets the analog stick to max left/right when in tilt turn range
 void backdash(){
@@ -180,13 +199,36 @@ void backdash(){
     }
 }
 
-// used for testing new ideas
-void test(){
+
+//--[ ACCESSIBILITY ]-----------------------------------------------------------
+
+// shorthop only button on X
+void shorthop(){
+
     if(gcc.x){
-        gcc.xAxis = 0;
+
+        // if counter is zero
+        if(counter_X == 0) {
+            // set counter to current milliseconds
+            counter_X = millis();
+        }
+
+        // if current milliseconds is 
+        if(millis() - counter_X > 3) {
+            gcc.x = 0; 
+        }
+    }
+    else {
+        counter_X = 0;
     }
 }
 
+
+//--[ TESTING ]-----------------------------------------------------------------
+
+void test(){
+
+}
 
 /*==[ SETUP ]=================================================================*/
 
@@ -223,9 +265,6 @@ void loop(){
     analog_y_abs = abs(analog_y);
     cstick_x_abs = abs(cstick_x);
     cstick_y_abs = abs(cstick_y);
-
-    // get the current time in milliseconds for this loop
-    loop_time = millis();
 
     // enables profile toggle
     toggle_profiles();

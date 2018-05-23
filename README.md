@@ -15,6 +15,7 @@ Arduino assisted Smash Bros. Melee
 ## FEATURES
 - Three profile toggle using D-pad (Left, Right, Down)
 - Perfect dashback that prevents tilt turn
+- Dedicated shorthop button (X)
 
 ## PREREQUISITES
 - Arduino (UNO, Nano, etc.)

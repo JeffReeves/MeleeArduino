@@ -72,3 +72,41 @@ void fc_nair_macro(){
 // Timing Code in main loop
 delta_t = millis() - last_t;
 last_t = millis();
+
+
+//==[ TIME AND FRAMES ]=========================================================
+
+/* for some reason, each macro needs its own variable to store millis(), 
+*     if they share a common variable it fails 
+*/
+
+//--[ FRAME COUNTER USING MICROSECONDS ]----------------------------------------
+
+const double MICROSECOND_PER_FRAME = 16666.66666666667; // 1000000 μs / 60 fps
+unsigned long frame = 0;  // used to count frames since start
+
+// counts the number of frames since the start
+void count_frames(){
+
+    // calculate current frame
+    unsigned long current_frame = floor(micros() / MICROSECOND_PER_FRAME);
+
+    // if current_frame is greater than the last time we checked
+    if(current_frame > frame){
+        frame = current_frame;
+    }
+}
+
+void test(){
+
+    if(gcc.y){
+        Serial.print("FRAME: ");
+        Serial.print(frame);
+        Serial.println();
+    }
+}
+
+void loop(){
+    // determine the current frame
+    count_frames();
+}
