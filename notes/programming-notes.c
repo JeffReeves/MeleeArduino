@@ -80,6 +80,10 @@ last_t = millis();
 *     if they share a common variable it fails 
 */
 
+// if(millis() - timer_X > 3) { 
+// note: when this executes for shorthop 3 must be used
+//  2 sometimes doesn't jump, 4 sometimes full hops
+
 //--[ FRAME COUNTER USING MICROSECONDS ]----------------------------------------
 
 const double MICROSECOND_PER_FRAME = 16666.66666666667; // 1000000 μs / 60 fps

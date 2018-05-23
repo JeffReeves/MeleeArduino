@@ -2,15 +2,16 @@
 *   AUTHOR:  Jeffrey Reeves
 *   WEBSITE: https://alchemist.digital/
 *   GITHUB:  https://github.com/JeffReeves
-*   PURPOSE: Improves consistency in Super Smash Brothers Melee for the 
-*               Nintendo GameCube.
+*   LICENSE: GNU General Public License v3.0
 *
+*   PURPOSE: Improves accessibility and consistency for human players in 
+*               Super Smash Brothers Melee for the Nintendo GameCube.
 *
 *   FEATURES:
-*       - Three profile toggle using D-pad (Left, Right, Down)
-*       - Perfect dashback that prevents tilt turn
+*       - Perfect dashback that prevents slower tilt turn state
 *       - Dedicated shorthop button (X)
-*
+*       - Always jumpcancel grab with Z button
+*       - Three profile toggle using D-pad (Left, Right, Down)
 *
 *   PREREQUISITES:
 *       - Arduino (UNO, Nano, etc.)
@@ -19,7 +20,6 @@
 *       - Controller (GameCube, extension cable, adapter, etc.)
 *       - Game Console (GameCube, Wii, etc.)
 *       - NicoHood's Nintendo Library for Arduino
-*
 *
 *   HOW TO INSTALL:
 *       1. Connect the Controller to the Arduino and the Logic Level Converter 
@@ -32,6 +32,8 @@
 *       7. Plug in the Controller into the Game Console and start it up.
 *       8. Enjoy playing Melee!
 *
+*   NOTE: Unless approved by a Tournament Organizer (TO), do **NOT** use this 
+*           Arduino assistant during competitive play.
 *
 */
 
@@ -49,105 +51,47 @@ CGamecubeConsole console(3);        // writes to console on D3
 // define object to store controller data
 Gamecube_Report_t gcc = defaultGamecubeData.report;
 
-
 //--[ CONSTANTS ]---------------------------------------------------------------
 
-// timing
-const unsigned char PROFILE_CHANGE_TIME = 100; // 100 ms
+// TIMING
+const unsigned char JUMPSQUAT_TIME = 3;     // 3 ms works for all characters
 
-// controls
-const unsigned char ANALOG_MAX_LEFT = 0;     // maximum X position left
-const unsigned char ANALOG_MAX_RIGHT = 255;  // maximum X position right
-const unsigned char ANALOG_MEDIAN = 128;     // middle of joystick
-const unsigned char DEAD_ZONE_END = 36;      // 0.2875, closest: 36 = 0.28125
-const unsigned char SMASH_TURN_START = 103;  // 0.8000, closest: 103 = 0.8046875
-
+// CONTROLS
+const unsigned char ANALOG_MAX_LEFT = 0;    // maximum X position left
+const unsigned char ANALOG_MAX_RIGHT = 255; // maximum X position right
+const unsigned char ANALOG_MEDIAN = 128;    // middle of joystick
+const unsigned char DEAD_ZONE_END = 36;     // 0.2875, closest: 36 = 0.28125
+const unsigned char SMASH_TURN_START = 103; // 0.8000, closest: 103 = 0.8046875
 
 //--[ GLOBALS ]-----------------------------------------------------------------
 
-// timing
-unsigned long counter_X = 0;    // used for keeping time during macros
-unsigned char cycles = 3;       // 3 = GC/Wii, 9 = Dolphin
-unsigned char buffer = 0; 
-unsigned long loop_time, current_time; 
+// TIMING
+unsigned char cycles = 3;   // 3 = GC/Wii, 9 = Dolphin
+unsigned char buffer = 0;   // buffer window
+unsigned long timer_X = 0;  // used for keeping time when X is pressed
+unsigned long timer_Z = 0;  // used for keeping time when Z is pressed
 
-// controls
-int analog_x, analog_y, cstick_x, cstick_y; 
-unsigned char analog_x_abs, analog_y_abs, cstick_x_abs, cstick_y_abs;
+// CONTROLS
+int analog_x, analog_y, cstick_x, cstick_y; // analog and cstick positions
+unsigned char analog_x_abs, analog_y_abs;   // absolute analog values
+unsigned char cstick_x_abs, cstick_y_abs;   // absolute cstick values 
 
-// profiles
+// PROFILES
 char active_profile = 'L';
 
 
 //==[ FUNCTIONS ]===============================================================
 
-//--[ SUPPORT ]-----------------------------------------------------------------
+//--[ BACKDASH ]----------------------------------------------------------------
+// PURPOSE: Prevents slow turn around (tilt turn) when attempting to backdash.
+// ACTION:  Sets the analog stick value to the maximum left/right coordinate 
+//              when the stick is within the tilt turn range during a three
+//              cycle buffer.
+// REASON:  The console can sometimes poll the controller in the middle of a 
+//              backdash. When this happens, an incorrect analog stick 
+//              coordinate value is used (at no fault of the player). Instead 
+//              of getting a fast dash, they get a slow turn around (tilt turn).
 
-
-//--[ PROFILES ]----------------------------------------------------------------
-
-void profile_left(){
-    backdash();
-    shorthop();
-    test();
-}
-
-void profile_right(){
-    test();
-}
-
-void profile_down(){
-    // everything disabled
-}
-
-// checks if a duration has passed
-bool time_elapsed(int duration){
-
-    // sets the current time
-    if(current_time == 0){
-        current_time = millis();
-    }
-
-    // returns true if duration has passed
-    if(loop_time - current_time > duration){
-        current_time = 0;
-        return true;
-    }
-
-    return false;
-}
-
-// toggles between different profiles using the dpad
-void toggle_profiles(){
-
-    // dpad left
-    if(gcc.dleft){
-
-        if(time_elapsed(PROFILE_CHANGE_TIME)){
-          active_profile = 'L';
-        }
-    }
-    // dpad right
-    else if(gcc.dright){
-
-        if(time_elapsed(PROFILE_CHANGE_TIME)){
-          active_profile = 'R';
-        }
-    }
-    // dpad down
-    else if(gcc.ddown){
-
-        if(time_elapsed(PROFILE_CHANGE_TIME)){
-          active_profile = 'D';
-        }
-    }
-}
-
-
-//--[ CONSISTENCY ]-------------------------------------------------------------
-
-// prevents tilt turn when attempting to backdash
-// sets the analog stick to max left/right when in tilt turn range
 void backdash(){
 
     // if analog stick Y is within deadzone
@@ -199,36 +143,126 @@ void backdash(){
     }
 }
 
+//--[ SHORTHOP ]----------------------------------------------------------------
+// PURPOSE: Always shorthops when X is pressed.
+// ACTION:  Disconnects X button 3 ms after it has been pressed.
+// REASON:  To shorthop, a player must press and release a jump button before 
+//              the character exits the jumpsquat state. On characters like Fox,
+//              the jumpsquat is 3 frames, or approximately 50 ms. This makes 
+//              shorthopping very difficult to consistently perform for most 
+//              players -- especially those with disabilites and/or repetitive 
+//              stress injuries.
 
-//--[ ACCESSIBILITY ]-----------------------------------------------------------
-
-// shorthop only button on X
 void shorthop(){
 
     if(gcc.x){
 
         // if counter is zero
-        if(counter_X == 0) {
+        if(timer_X == 0) {
             // set counter to current milliseconds
-            counter_X = millis();
+            timer_X = millis();
         }
 
-        // if current milliseconds is 
-        if(millis() - counter_X > 3) {
+        // while still in jumpsquat (3 frames)
+        if(millis() - timer_X > JUMPSQUAT_TIME) { 
+            // stop pressing X
             gcc.x = 0; 
         }
     }
     else {
-        counter_X = 0;
+        // if button is released, reset counter
+        timer_X = 0;
     }
 }
 
+//--[ JUMPCANCEL GRAB ]---------------------------------------------------------
+// PURPOSE: Always jumpcancel grab when Z is pressed.
+// ACTION:  Starts a jump and initates a grab after jumpsquat is started,
+//              resulting in a jumpcancelled grab.
+// REASON:  Grabs can be performed standing still or while running/dashing. The
+//              standing grab comes out faster; and if the opponent is missed, 
+//              it has less ending lag than a dash grab. A jumpcancelled grab 
+//              allows the player to get both of these benefits but while 
+//              running/dashing. The inputs required for a human to perform a 
+//              jumpcancelled grab (jump -> grab, within a window as short as
+//              50 ms) can increase the possibility of a repetitive stress 
+//              injury.
+
+void jumpcancel_grab(){
+
+    if(gcc.z){
+
+        // disables Z for duration of macro
+        gcc.z = 0;
+
+        if(timer_Z == 0) {
+            timer_Z = millis();
+        }
+
+        // until frame 2
+        if(millis() - timer_Z <= 2) { 
+            // hold Y to start jump
+            gcc.y = 1;
+        }
+        // after frame 2
+        else if(millis() - timer_Z > 2){
+            // release Y to stop jump
+            gcc.y = 0;
+            // press Z to initiate grab
+            gcc.z = 1;
+        }
+    }
+    else {
+        timer_Z = 0;
+    }
+}
+
+//--[ PROFILES ]----------------------------------------------------------------
+// PURPOSE: Allows the user to select which functions they want active by 
+//              toggling between three profiles that they can customize.
+// ACTION:  Selects a profile based upon a directional pad (dpad) direction. 
+//              The available profiles are located on left, down, and up.
+// REASON:  By having different profiles available to the player, they have the
+//              freedom to choose which functions they want at any given time.
+
+void profile_left(){
+    backdash();
+    shorthop();
+    jumpcancel_grab();
+    test();
+}
+
+void profile_right(){
+    backdash();
+    shorthop();
+    test();
+}
+
+void profile_down(){
+    test();
+}
+
+void toggle_profiles(){
+
+    if(gcc.dleft){
+        active_profile = 'L';
+    }
+    else if(gcc.dright){
+        active_profile = 'R';
+    }
+    else if(gcc.ddown){
+        active_profile = 'D';
+    }
+}
 
 //--[ TESTING ]-----------------------------------------------------------------
+// PURPOSE: Testing new ideas and functions.
+// ACTION:  Whatever is necessary.
+// REASON:  New ideas are always coming.
 
 void test(){
-
 }
+
 
 /*==[ SETUP ]=================================================================*/
 
@@ -253,14 +287,14 @@ void loop(){
     gcc = controller.getReport();
 
     // calculates the x and y coordinates of the joysticks
-    // NOTE: joysticks go from 0 to 255, 
-    //  subtracting 128 shifts the centerpoint to the middle.
+    // NOTE: joysticks go from 0 to 255 from left to right and bottom to top,
+    //  subtracting 128 from these values shifts the origin to the middle.
     analog_x = gcc.xAxis - ANALOG_MEDIAN; 
     analog_y = gcc.yAxis - ANALOG_MEDIAN; 
     cstick_x = gcc.cxAxis - ANALOG_MEDIAN; 
     cstick_y = gcc.cyAxis - ANALOG_MEDIAN;
 
-    // convert coordinates to an absolute value (i.e. -125 = 125)
+    // convert coordinates to an absolute value (i.e. -125 becomes 125)
     analog_x_abs = abs(analog_x);
     analog_y_abs = abs(analog_y);
     cstick_x_abs = abs(cstick_x);
