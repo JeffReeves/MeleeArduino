@@ -275,7 +275,7 @@ void loop(){
             profile_left();
             break;
         case 'R':
-            profile_left();
+            profile_right();
             break;
         case 'D':
             profile_down();
