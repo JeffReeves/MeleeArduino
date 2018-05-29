@@ -11,6 +11,7 @@
 *       - Perfect dashback that prevents slower tilt turn state
 *       - Dedicated shorthop (X) and fullhop (Y) buttons
 *       - Always jumpcancel grab with Z button
+*       - Dedicated light shield (L) button
 *       - Three profile toggle using D-pad (Left, Right, Down)
 *
 *   PREREQUISITES:
@@ -54,6 +55,7 @@ Gamecube_Report_t gcc = defaultGamecubeData.report;
 //--[ CONSTANTS ]---------------------------------------------------------------
 
 // TIMING
+const unsigned char PRE_JUMPSQUAT_TIME = 2;   // 2 ms works for all characters
 const unsigned char JUMPSQUAT_TIME = 3;       // 3 ms works for all characters
 const unsigned char POST_JUMPSQUAT_TIME = 25; // 25 ms works for all characters 
 
@@ -63,6 +65,7 @@ const unsigned char ANALOG_MAX_RIGHT = 255; // maximum X position right
 const unsigned char ANALOG_MEDIAN = 128;    // middle of joystick
 const unsigned char DEAD_ZONE_END = 36;     // 0.2875, closest: 36 = 0.28125
 const unsigned char SMASH_TURN_START = 103; // 0.8000, closest: 103 = 0.8046875
+const unsigned char LIGHT_SHIELD = 85;      // 255 max value for analog trigger
 
 //--[ GLOBALS ]-----------------------------------------------------------------
 
@@ -74,7 +77,8 @@ unsigned long timer_Y = 0;  // used for keeping time when Y is pressed
 unsigned long timer_Z = 0;  // used for keeping time when Z is pressed
 
 // STATES
-unsigned char jumping = 0;  // used to keep track of a jumping state
+unsigned char jumping = 0;      // used to keep track of a jumping state
+unsigned char shielding = 0;    // used to keep track of a shielding state
 
 // CONTROLS
 int analog_x, analog_y, cstick_x, cstick_y; // analog and cstick positions
@@ -189,6 +193,7 @@ void shorthop(){
 //              the character exits the jumpsquat state. Forcing a fullhop 
 //              on a single button press ensures consistency for the player -- 
 //              especially when paired with the shorthop button.
+
 void fullhop(){
 
     if(gcc.y | jumping){
@@ -243,12 +248,12 @@ void jumpcancel_grab(){
         }
 
         // until frame 2
-        if(millis() - timer_Z <= 2){ 
+        if(millis() - timer_Z <= PRE_JUMPSQUAT_TIME){ 
             // hold Y to start jump
             gcc.y = 1;
         }
         // after frame 2
-        else if(millis() - timer_Z > 2){
+        else if(millis() - timer_Z > PRE_JUMPSQUAT_TIME){
             // release Y to stop jump
             gcc.y = 0;
             // press Z to initiate grab
@@ -257,6 +262,33 @@ void jumpcancel_grab(){
     }
     else {
         timer_Z = 0;
+    }
+}
+
+//--[ LIGHTSHIELD ONLY ]--------------------------------------------------------
+// PURPOSE: Always light shield when L is pressed.
+// ACTION:  Converts any digital L press to a % of analog L pressing.
+// REASON:  A digital shield press (aka "hard shielding") locks the player out 
+//              of "teching" for 40 frames, even when used for "L canceling". 
+//              An analog shield press (aka "light shielding") does not cause 
+//              this same 40 frame lockout. In addition, there is almost no need
+//              for two seperate shield triggers.
+
+void lightshield_only(){
+
+    if(gcc.l | shielding){
+
+        // disable the digital L press
+        gcc.l = 0;
+
+        // toggle shielding status to on
+        shielding = 1;
+
+        // lightshield with analog L press at 33%
+        gcc.left = LIGHT_SHIELD;
+        
+        // stop shielding status
+        shielding = 0;
     }
 }
 
@@ -273,6 +305,7 @@ void profile_left(){
     shorthop();
     fullhop();
     jumpcancel_grab();
+    lightshield_only();
     test();
 }
 
