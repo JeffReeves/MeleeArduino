@@ -14,7 +14,7 @@ Super Smash Brothers Melee for the Nintendo GameCube.
 
 ## FEATURES
 - Perfect dashback that prevents slower tilt turn state
-- Dedicated shorthop button (X)
+- Dedicated shorthop (X) and fullhop (Y) buttons
 - Always jumpcancel grab with Z button
 - Three profile toggle using D-pad (Left, Right, Down)
 

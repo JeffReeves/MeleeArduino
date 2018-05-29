@@ -9,7 +9,7 @@
 *
 *   FEATURES:
 *       - Perfect dashback that prevents slower tilt turn state
-*       - Dedicated shorthop button (X)
+*       - Dedicated shorthop (X) and fullhop (Y) buttons
 *       - Always jumpcancel grab with Z button
 *       - Three profile toggle using D-pad (Left, Right, Down)
 *
@@ -54,7 +54,8 @@ Gamecube_Report_t gcc = defaultGamecubeData.report;
 //--[ CONSTANTS ]---------------------------------------------------------------
 
 // TIMING
-const unsigned char JUMPSQUAT_TIME = 3;     // 3 ms works for all characters
+const unsigned char JUMPSQUAT_TIME = 3;       // 3 ms works for all characters
+const unsigned char POST_JUMPSQUAT_TIME = 25; // 25 ms works for all characters 
 
 // CONTROLS
 const unsigned char ANALOG_MAX_LEFT = 0;    // maximum X position left
@@ -69,7 +70,11 @@ const unsigned char SMASH_TURN_START = 103; // 0.8000, closest: 103 = 0.8046875
 unsigned char cycles = 3;   // 3 = GC/Wii, 9 = Dolphin
 unsigned char buffer = 0;   // buffer window
 unsigned long timer_X = 0;  // used for keeping time when X is pressed
+unsigned long timer_Y = 0;  // used for keeping time when Y is pressed
 unsigned long timer_Z = 0;  // used for keeping time when Z is pressed
+
+// STATES
+unsigned char jumping = 0;  // used to keep track of a jumping state
 
 // CONTROLS
 int analog_x, analog_y, cstick_x, cstick_y; // analog and cstick positions
@@ -118,7 +123,7 @@ void backdash(){
                     // check if the x position is positive or negative
                     bool positive = analog_x > 0;
                     
-                    if(positive) {
+                    if(positive){
                         // set x value to max right
                         gcc.xAxis = ANALOG_MAX_RIGHT; // 255
                     }
@@ -158,13 +163,13 @@ void shorthop(){
     if(gcc.x){
 
         // if counter is zero
-        if(timer_X == 0) {
+        if(timer_X == 0){
             // set counter to current milliseconds
             timer_X = millis();
         }
 
         // while still in jumpsquat (3 frames)
-        if(millis() - timer_X > JUMPSQUAT_TIME) { 
+        if(millis() - timer_X > JUMPSQUAT_TIME){ 
             // stop pressing X
             gcc.x = 0; 
         }
@@ -172,6 +177,44 @@ void shorthop(){
     else {
         // if button is released, reset counter
         timer_X = 0;
+    }
+}
+
+//--[ FULLHOP ]-----------------------------------------------------------------
+// PURPOSE: Always fullhops when Y is pressed.
+// ACTION:  When the Y button is pressed a "jumping" state is activated. While
+//              in the "jumping" state, the Y button is held down until out of
+//              jumpsquat (currently 25 ms).
+// REASON:  To fullhop, a player must press and release a jump button after 
+//              the character exits the jumpsquat state. Forcing a fullhop 
+//              on a single button press ensures consistency for the player -- 
+//              especially when paired with the shorthop button.
+void fullhop(){
+
+    if(gcc.y | jumping){
+
+        // if counter is zero
+        if(timer_Y == 0){
+            // set counter to current milliseconds
+            timer_Y = millis();
+            // toggle jumping status to on
+            jumping = 1;
+        }
+
+        // before exiting jumpsquat (6 frames)
+        if(millis() - timer_Y <= POST_JUMPSQUAT_TIME){ 
+            // keep pressing Y
+            gcc.y = 1;
+        }
+        else if(millis() - timer_Y > POST_JUMPSQUAT_TIME){
+            gcc.y = 0;
+            // stop jumping status
+            jumping = 0;
+        }
+    }
+    else {
+        // if button is released, reset counter
+        timer_Y = 0;
     }
 }
 
@@ -195,12 +238,12 @@ void jumpcancel_grab(){
         // disables Z for duration of macro
         gcc.z = 0;
 
-        if(timer_Z == 0) {
+        if(timer_Z == 0){
             timer_Z = millis();
         }
 
         // until frame 2
-        if(millis() - timer_Z <= 2) { 
+        if(millis() - timer_Z <= 2){ 
             // hold Y to start jump
             gcc.y = 1;
         }
@@ -228,6 +271,7 @@ void jumpcancel_grab(){
 void profile_left(){
     backdash();
     shorthop();
+    fullhop();
     jumpcancel_grab();
     test();
 }
@@ -235,6 +279,7 @@ void profile_left(){
 void profile_right(){
     backdash();
     shorthop();
+    fullhop();
     test();
 }
 
