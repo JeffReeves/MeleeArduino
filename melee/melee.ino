@@ -68,15 +68,18 @@ const unsigned char JOYSTICK_MAX_DOWN  = 0;     // maximum Y position down
 const unsigned char JOYSTICK_MAX_RIGHT = 255;   // maximum X position right
 const unsigned char JOYSTICK_MAX_UP    = 255;   // maximum Y position up
 
-const unsigned char SMASH_START_LEFT  = 73;     // 73/255  = 0.2863
-const unsigned char SMASH_START_DOWN  = 73;     // 0.2875 = start of tilt turn
-const unsigned char SMASH_START_RIGHT = 204;    // 204/255 = 0.8000 up
-const unsigned char SMASH_START_UP    = 204;    // 204/255 = 0.8000 down
+const unsigned char SMASH_START_LEFT  = 73;     // 73/255  = 0.2863 left
+const unsigned char SMASH_START_DOWN  = 73;     // 73/255  = 0.2863 down
+const unsigned char SMASH_START_RIGHT = 204;    // 204/255 = 0.8000 right
+const unsigned char SMASH_START_UP    = 204;    // 204/255 = 0.8000 up
 
-const unsigned char LIGHT_SHIELD = 85;          // 85/255 = 33%
+const unsigned char SMASH_ALMOST_MAX_UP  = 245;    // 245/255 = 0.9608 up
+
+const unsigned char LIGHT_SHIELD = 85;             // 85/255 = 33% pressed
 
 // using -128 to +127 absolute value
 const unsigned char DEAD_ZONE_END    = 36;      // 0.2875, closest: 36 = 0.28125
+const unsigned char WALK_END         = 102;     // 0.7999, closest: 102 = 0.7969
 const unsigned char SMASH_TURN_START = 103;     // 0.8000, closest: 103 = 0.8047
 
 //--[ GLOBALS ]-----------------------------------------------------------------
@@ -93,6 +96,7 @@ unsigned long timer_cstick_up = 0;  // keep time when cstick is moved up
 // STATES
 unsigned char jumping = 0;            // character jumping
 unsigned char shielding = 0;          // character shielding
+unsigned char jc_grab_active = 0;     // character jumpcancel grab
 unsigned char jc_upsmash_active = 0;  // character jumpcancel upsmash
 
 // CONTROLS
@@ -238,95 +242,6 @@ void fullhop(){
     }
 }
 
-//--[ JUMPCANCEL GRAB ]---------------------------------------------------------
-// PURPOSE: Always jumpcancel grab when Z is pressed.
-// ACTION:  Starts a jump and initates a grab after jumpsquat is started,
-//              resulting in a jumpcancelled grab.
-// REASON:  Grabs can be performed standing still or while running/dashing. The
-//              standing grab comes out faster; and if the opponent is missed, 
-//              it has less ending lag than a dash grab. A jumpcancelled grab 
-//              allows the player to get both of these benefits but while 
-//              running/dashing. The inputs required for a human to perform a 
-//              jumpcancelled grab (jump -> grab, within a window as short as
-//              50 ms) can increase the possibility of a repetitive stress 
-//              injury.
-
-void jumpcancel_grab(){
-
-    if(gcc.z){
-
-        // disables Z for duration of macro
-        gcc.z = 0;
-
-        if(timer_Z == 0){
-            timer_Z = millis();
-        }
-
-        // until frame 2
-        if(millis() - timer_Z <= PRE_JUMPSQUAT_TIME){ 
-            // hold Y to start jump
-            gcc.y = 1;
-        }
-        // after frame 2
-        else if(millis() - timer_Z > PRE_JUMPSQUAT_TIME){
-            // release Y to stop jump
-            gcc.y = 0;
-            // press Z to initiate grab
-            gcc.z = 1;
-        }
-    }
-    else {
-        timer_Z = 0;
-    }
-}
-
-//--[ JUMPCANCEL UPSMASH ]------------------------------------------------------
-// PURPOSE: Always jumpcancel upsmash when the C stick is moved up.
-// ACTION:  Checks if the Y axis of the C stick was being smashed upwards. If it
-//              is, input a jump and then the upsmash during jumpsquat.
-// REASON:  A jumpcancelled upsmash allows the player to insert an upsmash 
-//              attack while dashing / running, as if they were standing still.
-//              Therefore, this macro exists for the same reason the jumpcancel
-//              grab does.
-
-void jumpcancel_upsmash(){
-
-    // if cstick Y axis is greater or equal to start position for upsmash
-    // or a jumpcancelled upsmash is already started
-    if((gcc.cyAxis >= SMASH_START_UP) | jc_upsmash_active){
-
-        // set status to active
-        jc_upsmash_active = 1;
-
-        // set cstick Y axis to the middle position for now
-        gcc.cyAxis = JOYSTICK_MEDIAN;
-
-        // start a timer if one isn't already running
-        if(timer_cstick_up == 0){
-            timer_cstick_up = millis();
-        }
-
-        // until frame 2
-        if(millis() - timer_cstick_up <= PRE_JUMPSQUAT_TIME){ 
-            // hold Y to start jump
-            gcc.y = 1;
-        }
-        // after frame 2
-        else if(millis() - timer_cstick_up > PRE_JUMPSQUAT_TIME){
-            // release Y to stop jump
-            gcc.y = 0;
-            // set cstick Y axis in max value for upsmash
-            gcc.cyAxis = JOYSTICK_MAX_UP;
-            // stop upsmash status
-            jc_upsmash_active = 0;
-        }
-    }
-    else {
-        timer_cstick_up = 0;
-        jc_upsmash_active = 0;
-    }
-}
-
 //--[ LIGHTSHIELD ONLY ]--------------------------------------------------------
 // PURPOSE: Always light shield when L is pressed.
 // ACTION:  Converts any digital L press to a % of analog L pressing.
@@ -338,7 +253,7 @@ void jumpcancel_upsmash(){
 
 void lightshield_only(){
 
-    if(gcc.l | shielding){
+    if(gcc.left >= 1 | gcc.l | shielding){
 
         // disable the digital L press
         gcc.l = 0;
@@ -354,6 +269,142 @@ void lightshield_only(){
     }
 }
 
+//--[ JUMPCANCEL GRAB ]---------------------------------------------------------
+// PURPOSE: Always jumpcancel grab when Z is pressed.
+// ACTION:  If the player is holding the X axis of the analog stick in a 
+//              position outside of the deadzone and walk sections, and the Z 
+//              button is pressed, start a jump and initate a grab before 
+//              jumpsquat is finished. This results in a jumpcancelled grab.
+// REASON:  Grabs can be performed standing still or while running/dashing. The
+//              standing grab comes out faster; and if the opponent is missed, 
+//              it has less ending lag than a dash grab. A jumpcancelled grab 
+//              allows the player to get both of these benefits but while 
+//              running/dashing. The inputs required for a human to perform a 
+//              jumpcancelled grab (jump -> grab, within a window as short as
+//              50 ms) can increase the possibility of a repetitive stress 
+//              injury.
+
+void jumpcancel_grab(){
+
+    // if analog stick is outside of the deadzone and walk range
+    if(analog_x_abs > WALK_END) {
+
+        if(gcc.z | jc_grab_active){
+
+            // disable Z for duration of macro
+            gcc.z = 0;
+
+            // set status of jumpcancelled grab to active
+            jc_grab_active = 1;
+
+            if(timer_Z == 0){
+                timer_Z = millis();
+            }
+
+            // until frame 2
+            if(millis() - timer_Z <= PRE_JUMPSQUAT_TIME){ 
+                // hold Y to start jump
+                gcc.y = 1;
+            }
+            // after frame 2
+            else if(millis() - timer_Z > PRE_JUMPSQUAT_TIME){
+                // release Y to stop jump
+                gcc.y = 0;
+                // press Z to initiate grab
+                gcc.z = 1;
+                // disable jumpcancel status
+                jc_grab_active = 0;
+            }
+        }
+        else {
+            timer_Z = 0;
+            jc_grab_active = 0;
+        }
+    }
+    else {
+        timer_Z = 0;
+        jc_grab_active = 0;
+    }
+}
+
+//--[ JUMPCANCEL UPSMASH ]------------------------------------------------------
+// PURPOSE: Always jumpcancel upsmash when the C stick is moved up.
+// ACTION:  If the player is holding the X axis of the analog stick in a 
+//              position outside of the deadzone and walk sections, and the
+//              C Stick's Y axis is in the up smash position, start a jump and 
+//              initate an upsmash attack before jumpsquat is finished. This 
+//              results in a jumpcancelled upsmash.
+// REASON:  A jumpcancelled upsmash allows the player to insert an upsmash 
+//              attack while dashing / running, as if they were standing still.
+//              Therefore, this macro exists for the same reason the jumpcancel
+//              grab does.
+
+void jumpcancel_upsmash(){
+
+    // if analog stick is outside of the deadzone and walk range
+    if(analog_x_abs > WALK_END) {
+
+        // if cstick Y axis is greater or equal to the start of the upsmash 
+        //      range (204), or a jumpcancelled upsmash is already started
+        if((gcc.cyAxis >= SMASH_START_UP) | jc_upsmash_active){
+
+            // set status to active
+            jc_upsmash_active = 1;
+
+            // set cstick Y axis to the middle position for now
+            gcc.cyAxis = JOYSTICK_MEDIAN;
+
+            // start a timer if one isn't already running
+            if(timer_cstick_up == 0){
+                timer_cstick_up = millis();
+            }
+
+            // until frame 2
+            if(millis() - timer_cstick_up <= PRE_JUMPSQUAT_TIME){ 
+                // hold Y to start jump
+                gcc.y = 1;
+            }
+            // after frame 2
+            else if(millis() - timer_cstick_up > PRE_JUMPSQUAT_TIME){
+                // release Y to stop jump
+                gcc.y = 0;
+                // set cstick Y axis in max value for upsmash
+                gcc.cyAxis = JOYSTICK_MAX_UP;
+                // stop upsmash status
+                jc_upsmash_active = 0;
+            }
+        }
+        else {
+            timer_cstick_up = 0;
+            jc_upsmash_active = 0;
+        }
+    }
+    else {
+        timer_cstick_up = 0;
+        jc_upsmash_active = 0;
+    }
+}
+
+//--[ L+R+A+START ]-------------------------------------------------------------
+// PURPOSE: Enter L+R+A+Start for quitting a game when paused.
+// ACTION:  Directional pad (dpad) up is converted to L+R+A+Start.
+// REASON:  Any light shield only trigger buttons prevents pressing L+R+A+Start
+//              to quit out of an active game when in the pause menu. In 
+//              addition, the button combination can be difficult for those with
+//              disabilities.
+
+void lra_start(){
+
+    if(gcc.dup){
+
+        // press L+R+A+Start
+        gcc.l = 1;
+        gcc.r = 1;
+        gcc.a = 1;
+        gcc.start = 1;
+    }
+}
+
 //--[ PROFILES ]----------------------------------------------------------------
 // PURPOSE: Allows the user to select which functions they want active by 
 //              toggling between three profiles that they can customize.
@@ -366,9 +417,10 @@ void profile_left(){
     backdash();
     shorthop();
     fullhop();
+    lightshield_only();
     jumpcancel_grab();
     jumpcancel_upsmash();
-    lightshield_only();
+    lra_start();
 }
 
 void profile_right(){
@@ -449,9 +501,3 @@ void loop(){
     // write data to console
     console.write(gcc);
 }
-
-
-
-
-
-
