@@ -11,6 +11,7 @@
 *       - Perfect dashback that prevents slower tilt turn state
 *       - Dedicated shorthop (X) and fullhop (Y) buttons
 *       - Always jumpcancel grab with Z button
+*       - Always jumpcancel upsmash with C-Stick Up
 *       - Dedicated light shield (L) button
 *       - Three profile toggle using D-pad (Left, Right, Down)
 *
@@ -60,25 +61,39 @@ const unsigned char JUMPSQUAT_TIME = 3;       // 3 ms works for all characters
 const unsigned char POST_JUMPSQUAT_TIME = 25; // 25 ms works for all characters 
 
 // CONTROLS
-const unsigned char ANALOG_MAX_LEFT = 0;    // maximum X position left
-const unsigned char ANALOG_MAX_RIGHT = 255; // maximum X position right
-const unsigned char ANALOG_MEDIAN = 128;    // middle of joystick
-const unsigned char DEAD_ZONE_END = 36;     // 0.2875, closest: 36 = 0.28125
-const unsigned char SMASH_TURN_START = 103; // 0.8000, closest: 103 = 0.8046875
-const unsigned char LIGHT_SHIELD = 85;      // 255 max value for analog trigger
+// using 0-255 true value
+const unsigned char JOYSTICK_MEDIAN    = 128;   // middle position of joystick
+const unsigned char JOYSTICK_MAX_LEFT  = 0;     // maximum X position left
+const unsigned char JOYSTICK_MAX_DOWN  = 0;     // maximum Y position down
+const unsigned char JOYSTICK_MAX_RIGHT = 255;   // maximum X position right
+const unsigned char JOYSTICK_MAX_UP    = 255;   // maximum Y position up
+
+const unsigned char SMASH_START_LEFT  = 73;     // 73/255  = 0.2863
+const unsigned char SMASH_START_DOWN  = 73;     // 0.2875 = start of tilt turn
+const unsigned char SMASH_START_RIGHT = 204;    // 204/255 = 0.8000 up
+const unsigned char SMASH_START_UP    = 204;    // 204/255 = 0.8000 down
+
+const unsigned char LIGHT_SHIELD = 85;          // 85/255 = 33%
+
+// using -128 to +127 absolute value
+const unsigned char DEAD_ZONE_END    = 36;      // 0.2875, closest: 36 = 0.28125
+const unsigned char SMASH_TURN_START = 103;     // 0.8000, closest: 103 = 0.8047
 
 //--[ GLOBALS ]-----------------------------------------------------------------
 
 // TIMING
-unsigned char cycles = 3;   // 3 = GC/Wii, 9 = Dolphin
-unsigned char buffer = 0;   // buffer window
-unsigned long timer_X = 0;  // used for keeping time when X is pressed
-unsigned long timer_Y = 0;  // used for keeping time when Y is pressed
-unsigned long timer_Z = 0;  // used for keeping time when Z is pressed
+unsigned char cycles = 3;           // 3 = GC/Wii, 9 = Dolphin
+unsigned char buffer = 0;           // buffer window
+
+unsigned long timer_X = 0;          // keep time when X is pressed
+unsigned long timer_Y = 0;          // keep time when Y is pressed
+unsigned long timer_Z = 0;          // keep time when Z is pressed
+unsigned long timer_cstick_up = 0;  // keep time when cstick is moved up
 
 // STATES
-unsigned char jumping = 0;      // used to keep track of a jumping state
-unsigned char shielding = 0;    // used to keep track of a shielding state
+unsigned char jumping = 0;            // character jumping
+unsigned char shielding = 0;          // character shielding
+unsigned char jc_upsmash_active = 0;  // character jumpcancel upsmash
 
 // CONTROLS
 int analog_x, analog_y, cstick_x, cstick_y; // analog and cstick positions
@@ -129,11 +144,11 @@ void backdash(){
                     
                     if(positive){
                         // set x value to max right
-                        gcc.xAxis = ANALOG_MAX_RIGHT; // 255
+                        gcc.xAxis = JOYSTICK_MAX_RIGHT;
                     }
                     else {
                         // set x value to max left
-                        gcc.xAxis = ANALOG_MAX_LEFT; // 0
+                        gcc.xAxis = JOYSTICK_MAX_LEFT;
                     }
                 } 
                 // if analog stick is within smash turn start
@@ -265,6 +280,53 @@ void jumpcancel_grab(){
     }
 }
 
+//--[ JUMPCANCEL UPSMASH ]------------------------------------------------------
+// PURPOSE: Always jumpcancel upsmash when the C stick is moved up.
+// ACTION:  Checks if the Y axis of the C stick was being smashed upwards. If it
+//              is, input a jump and then the upsmash during jumpsquat.
+// REASON:  A jumpcancelled upsmash allows the player to insert an upsmash 
+//              attack while dashing / running, as if they were standing still.
+//              Therefore, this macro exists for the same reason the jumpcancel
+//              grab does.
+
+void jumpcancel_upsmash(){
+
+    // if cstick Y axis is greater or equal to start position for upsmash
+    // or a jumpcancelled upsmash is already started
+    if((gcc.cyAxis >= SMASH_START_UP) | jc_upsmash_active){
+
+        // set status to active
+        jc_upsmash_active = 1;
+
+        // set cstick Y axis to the middle position for now
+        gcc.cyAxis = JOYSTICK_MEDIAN;
+
+        // start a timer if one isn't already running
+        if(timer_cstick_up == 0){
+            timer_cstick_up = millis();
+        }
+
+        // until frame 2
+        if(millis() - timer_cstick_up <= PRE_JUMPSQUAT_TIME){ 
+            // hold Y to start jump
+            gcc.y = 1;
+        }
+        // after frame 2
+        else if(millis() - timer_cstick_up > PRE_JUMPSQUAT_TIME){
+            // release Y to stop jump
+            gcc.y = 0;
+            // set cstick Y axis in max value for upsmash
+            gcc.cyAxis = JOYSTICK_MAX_UP;
+            // stop upsmash status
+            jc_upsmash_active = 0;
+        }
+    }
+    else {
+        timer_cstick_up = 0;
+        jc_upsmash_active = 0;
+    }
+}
+
 //--[ LIGHTSHIELD ONLY ]--------------------------------------------------------
 // PURPOSE: Always light shield when L is pressed.
 // ACTION:  Converts any digital L press to a % of analog L pressing.
@@ -305,19 +367,17 @@ void profile_left(){
     shorthop();
     fullhop();
     jumpcancel_grab();
+    jumpcancel_upsmash();
     lightshield_only();
-    test();
 }
 
 void profile_right(){
     backdash();
     shorthop();
     fullhop();
-    test();
 }
 
 void profile_down(){
-    test();
 }
 
 void toggle_profiles(){
@@ -331,14 +391,6 @@ void toggle_profiles(){
     else if(gcc.ddown){
         active_profile = 'D';
     }
-}
-
-//--[ TESTING ]-----------------------------------------------------------------
-// PURPOSE: Testing new ideas and functions.
-// ACTION:  Whatever is necessary.
-// REASON:  New ideas are always coming.
-
-void test(){
 }
 
 
@@ -367,10 +419,10 @@ void loop(){
     // calculates the x and y coordinates of the joysticks
     // NOTE: joysticks go from 0 to 255 from left to right and bottom to top,
     //  subtracting 128 from these values shifts the origin to the middle.
-    analog_x = gcc.xAxis - ANALOG_MEDIAN; 
-    analog_y = gcc.yAxis - ANALOG_MEDIAN; 
-    cstick_x = gcc.cxAxis - ANALOG_MEDIAN; 
-    cstick_y = gcc.cyAxis - ANALOG_MEDIAN;
+    analog_x = gcc.xAxis - JOYSTICK_MEDIAN; 
+    analog_y = gcc.yAxis - JOYSTICK_MEDIAN; 
+    cstick_x = gcc.cxAxis - JOYSTICK_MEDIAN; 
+    cstick_y = gcc.cyAxis - JOYSTICK_MEDIAN;
 
     // convert coordinates to an absolute value (i.e. -125 becomes 125)
     analog_x_abs = abs(analog_x);
@@ -397,3 +449,9 @@ void loop(){
     // write data to console
     console.write(gcc);
 }
+
+
+
+
+
+
