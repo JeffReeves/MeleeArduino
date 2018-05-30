@@ -19,6 +19,7 @@ Super Smash Brothers Melee for the Nintendo GameCube.
 - Always jumpcancel upsmash with C-Stick Up
 - Dedicated light shield (L) button
 - Three profile toggle using D-pad (Left, Right, Down)
+- L+R+A+Start macro (dpad up)
 
 ## PREREQUISITES
 - Arduino (UNO, Nano, etc.)
