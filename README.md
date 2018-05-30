@@ -21,6 +21,10 @@ Super Smash Brothers Melee for the Nintendo GameCube.
 - Three profile toggle using D-pad (Left, Right, Down)
 - L+R+A+Start macro (dpad up)
 
+### DEMO VIDEO
+
+[![Melee Arduino Controller V1 Demo](https://raw.githubusercontent.com/JeffReeves/MeleeArduino/master/images/arduino-melee-thumbnail.png)](https://youtu.be/7cQj1xHGyI0 "Melee Arduino Controller V1 Demo")
+
 ## PREREQUISITES
 - Arduino (UNO, Nano, etc.)
 - Arduino IDE
