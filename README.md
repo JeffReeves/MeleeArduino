@@ -13,13 +13,11 @@ Super Smash Brothers Melee for the Nintendo GameCube.
 **LICENSE**: GNU General Public License v3.0
 
 ## FEATURES
-- Perfect dashback that prevents slower tilt turn state
+- Four profile toggle using D-pad (Left, Right, Up, Down)
 - Dedicated shorthop (X) and fullhop (Y) buttons
 - Always jumpcancel grab with Z button
 - Always jumpcancel upsmash with C-Stick Up
 - Dedicated light shield (L) button
-- Three profile toggle using D-pad (Left, Right, Down)
-- L+R+A+Start macro (dpad up)
 
 ### DEMO VIDEO
 
