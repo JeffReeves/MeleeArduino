@@ -8,13 +8,11 @@
 *               Super Smash Brothers Melee for the Nintendo GameCube.
 *
 *   FEATURES:
-*       - Perfect dashback that prevents slower tilt turn state
 *       - Dedicated shorthop (X) and fullhop (Y) buttons
 *       - Always jumpcancel grab with Z button
 *       - Always jumpcancel upsmash with C-Stick Up
 *       - Dedicated light shield (L) button
-*       - Three profile toggle using D-pad (Left, Right, Down)
-*       - L+R+A+Start macro (dpad up)
+*       - Four profile toggle using D-pad (Left, Right, Up, Down)
 *
 *   PREREQUISITES:
 *       - Arduino (UNO, Nano, etc.)
@@ -48,8 +46,8 @@
 #include <Nintendo.h>
 
 // arduino ports for data wire
-CGamecubeController controller(2);  // reads from controller on D2
-CGamecubeConsole console(3);        // writes to console on D3
+CGamecubeController controller(6);   // reads from controller on D6
+CGamecubeConsole console(12);        // writes to console on D12
 
 // define object to store controller data
 Gamecube_Report_t gcc = defaultGamecubeData.report;
@@ -106,71 +104,10 @@ unsigned char analog_x_abs, analog_y_abs;   // absolute analog values
 unsigned char cstick_x_abs, cstick_y_abs;   // absolute cstick values 
 
 // PROFILES
-char active_profile = 'L';
+char active_profile = 'U';
 
 
 //==[ FUNCTIONS ]===============================================================
-
-//--[ BACKDASH ]----------------------------------------------------------------
-// PURPOSE: Prevents slow turn around (tilt turn) when attempting to backdash.
-// ACTION:  Sets the analog stick value to the maximum left/right coordinate 
-//              when the stick is within the tilt turn range during a three
-//              cycle buffer.
-// REASON:  The console can sometimes poll the controller in the middle of a 
-//              backdash. When this happens, an incorrect analog stick 
-//              coordinate value is used (at no fault of the player). Instead 
-//              of getting a fast dash, they get a slow turn around (tilt turn).
-
-void backdash(){
-
-    // if analog stick Y is within deadzone
-    if(analog_y_abs <= DEAD_ZONE_END){
-
-        // if analog stick X is within deadzone
-        if(analog_x_abs <= DEAD_ZONE_END){
-
-            // refresh buffer (default: 3)
-            buffer = cycles;
-        }
-        // else analog stick X is outside of deadzone
-        else {
-
-            // if a buffer exists
-            if(buffer > 0){
-                
-                // decrement buffer
-                buffer--; 
-                
-                // if the analog stick X is in tilt turn position 
-                if(analog_x_abs < SMASH_TURN_START){
-                    
-                    // check if the x position is positive or negative
-                    bool positive = analog_x > 0;
-                    
-                    if(positive){
-                        // set x value to max right
-                        gcc.xAxis = JOYSTICK_MAX_RIGHT;
-                    }
-                    else {
-                        // set x value to max left
-                        gcc.xAxis = JOYSTICK_MAX_LEFT;
-                    }
-                } 
-                // if analog stick is within smash turn start
-                else {
-                    // don't change x value 
-                    // clear buffer 
-                    buffer = 0;
-                }
-            }
-        }
-    }
-    // analog stick exited Y deadzone
-    else {
-        // clear buffer
-        buffer = 0;
-    }
-}
 
 //--[ SHORTHOP ]----------------------------------------------------------------
 // PURPOSE: Always shorthops when X is pressed.
@@ -216,7 +153,7 @@ void shorthop(){
 
 void fullhop(){
 
-    if(gcc.y | jumping){
+    if(gcc.y || jumping){
 
         // if counter is zero
         if(timer_Y == 0){
@@ -254,23 +191,34 @@ void fullhop(){
 
 void lightshield_only(){
 
-    if(gcc.left >= 1 | gcc.l | shielding){
+    // verify the right analog trigger is not being pressed for L+R+A+Start
+    if(gcc.right >= 1 || gcc.r){
 
-        // disable the digital L press
-        gcc.l = 0;
-
-        // toggle shielding status to on
-        shielding = 1;
-
-        // lightshield with analog L press at 33%
-        gcc.left = LIGHT_SHIELD;
-        
         // stop shielding status
         shielding = 0;
+    }
+    else {
+
+        // if the left analog trigger is pressed at all
+        if(gcc.left >= 1 || gcc.l || shielding){
+    
+            // disable the digital L press
+            gcc.l = 0;
+    
+            // toggle shielding status to on
+            shielding = 1;
+    
+            // lightshield with analog L press at 33%
+            gcc.left = LIGHT_SHIELD;
+            
+            // stop shielding status
+            shielding = 0;
+        }
     }
 }
 
 //--[ JUMPCANCEL GRAB ]---------------------------------------------------------
+// NOTE:    This interferes with using Z for aerials attacks.
 // PURPOSE: Always jumpcancel grab when Z is pressed.
 // ACTION:  If the player is holding the X axis of the analog stick in a 
 //              position outside of the deadzone and walk sections, and the Z 
@@ -290,7 +238,7 @@ void jumpcancel_grab(){
     // if analog stick is outside of the deadzone and walk range
     if(analog_x_abs > WALK_END) {
 
-        if(gcc.z | jc_grab_active){
+        if(gcc.z || jc_grab_active){ 
 
             // disable Z for duration of macro
             gcc.z = 0;
@@ -329,6 +277,7 @@ void jumpcancel_grab(){
 }
 
 //--[ JUMPCANCEL UPSMASH ]------------------------------------------------------
+// NOTE:    This interferes with using the c-up for aerial attacks.
 // PURPOSE: Always jumpcancel upsmash when the C stick is moved up.
 // ACTION:  If the player is holding the X axis of the analog stick in a 
 //              position outside of the deadzone and walk sections, and the
@@ -347,7 +296,7 @@ void jumpcancel_upsmash(){
 
         // if cstick Y axis is greater or equal to the start of the upsmash 
         //      range (204), or a jumpcancelled upsmash is already started
-        if((gcc.cyAxis >= SMASH_START_UP) | jc_upsmash_active){
+        if((gcc.cyAxis >= SMASH_START_UP) || jc_upsmash_active){
 
             // set status to active
             jc_upsmash_active = 1;
@@ -386,48 +335,33 @@ void jumpcancel_upsmash(){
     }
 }
 
-//--[ L+R+A+START ]-------------------------------------------------------------
-// PURPOSE: Enter L+R+A+Start for quitting a game when paused.
-// ACTION:  Directional pad (dpad) up is converted to L+R+A+Start.
-// REASON:  Any light shield only trigger buttons prevents pressing L+R+A+Start
-//              to quit out of an active game when in the pause menu. In 
-//              addition, the button combination can be difficult for those with
-//              disabilities.
-
-void lra_start(){
-
-    if(gcc.dup){
-
-        // press L+R+A+Start
-        gcc.l = 1;
-        gcc.r = 1;
-        gcc.a = 1;
-        gcc.start = 1;
-    }
-}
 
 //--[ PROFILES ]----------------------------------------------------------------
 // PURPOSE: Allows the user to select which functions they want active by 
 //              toggling between three profiles that they can customize.
-// ACTION:  Selects a profile based upon a directional pad (dpad) direction. 
-//              The available profiles are located on left, down, and up.
+// ACTION:  Selects a profile based upon a directional pad (dpad) direction 
+//              when both the B and A buttons are held. The available profiles 
+//              are located on left, right, up, and down.
 // REASON:  By having different profiles available to the player, they have the
 //              freedom to choose which functions they want at any given time.
 
+void profile_up(){
+    shorthop();
+    fullhop();
+    lightshield_only();
+}
+
 void profile_left(){
-    backdash();
+    shorthop();
+    fullhop();
+}
+
+void profile_right(){
     shorthop();
     fullhop();
     lightshield_only();
     jumpcancel_grab();
     jumpcancel_upsmash();
-    lra_start();
-}
-
-void profile_right(){
-    backdash();
-    shorthop();
-    fullhop();
 }
 
 void profile_down(){
@@ -435,14 +369,22 @@ void profile_down(){
 
 void toggle_profiles(){
 
-    if(gcc.dleft){
-        active_profile = 'L';
-    }
-    else if(gcc.dright){
-        active_profile = 'R';
-    }
-    else if(gcc.ddown){
-        active_profile = 'D';
+    // if both B and A buttons are held
+    if(gcc.b && gcc.a){
+
+        // if a dpad direction is pressed
+        if(gcc.dup){
+            active_profile = 'U';
+        }
+        else if(gcc.dleft){
+            active_profile = 'L';
+        }
+        else if(gcc.dright){
+            active_profile = 'R';
+        }
+        else if(gcc.ddown){
+            active_profile = 'D';
+        }
     }
 }
 
@@ -488,6 +430,9 @@ void loop(){
 
     // activate profile based on selection with dpad
     switch(active_profile){
+        case 'U':
+            profile_up();
+            break;
         case 'L':
             profile_left();
             break;
